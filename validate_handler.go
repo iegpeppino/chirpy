@@ -3,11 +3,13 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 )
 
 func validateChirpHandler(w http.ResponseWriter, r *http.Request) {
+
 	type returnVals struct {
-		Valid bool `json:"valid"`
+		CleanedBody string `json:"cleaned_body"`
 	}
 
 	type requestParams struct {
@@ -33,6 +35,20 @@ func validateChirpHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Handling bad words
+	badWords := []string{"kerfuffle", "sharbert", "fornax"}
+
+	unclean_body := strings.Split(params.Body, " ")
+	for i, word := range unclean_body {
+		for _, b_word := range badWords {
+			if strings.ToLower(word) == b_word {
+				unclean_body[i] = "****"
+			}
+		}
+	}
+	cleaned_body := strings.Join(unclean_body, " ")
 	// If valid, send response and Code 200 with JSON helper func
-	sendRespondJSON(w, http.StatusOK, returnVals{Valid: true})
+
+	sendRespondJSON(w, http.StatusOK, returnVals{CleanedBody: cleaned_body})
+
 }
