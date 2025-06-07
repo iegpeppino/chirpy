@@ -1,6 +1,7 @@
 package main
 
 import (
+	"chirpy/internal/auth"
 	"chirpy/internal/database"
 	"encoding/json"
 	"net/http"
@@ -16,11 +17,12 @@ type User struct {
 	Email     string    `json:"email"`
 }
 
-func (c *apiConfig) createUserHandler(w http.ResponseWriter, r *http.Request) {
+func (c *apiConfig) loginUserHandler(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 
 	type reqParams struct {
-		Email string `json:"email"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
 	}
 
 	params := reqParams{}
@@ -30,11 +32,45 @@ func (c *apiConfig) createUserHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	user, err := c.db.GetUserByEmail(r.Context(), params.Email)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Couldn't get user data", err)
+	}
+
+	err = auth.CheckPasswordHash(user.HashedPassword, params.Password)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Incorrect email or password", err)
+	}
+
+	sendRespondJSON(w, 200, mapDbUserToResponseUser(user))
+}
+
+func (c *apiConfig) createUserHandler(w http.ResponseWriter, r *http.Request) {
+	decoder := json.NewDecoder(r.Body)
+
+	type reqParams struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+
+	params := reqParams{}
+	err := decoder.Decode(&params)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't decode parameters", err)
+		return
+	}
+	// Hashes password with auth package func
+	hashedPass, err := auth.HashPassword(params.Password)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Couldn't hash password", err)
+	}
+
 	newUserParams := database.CreateUserParams{
-		ID:        uuid.New(),
-		CreatedAt: time.Now().UTC(),
-		UpdatedAt: time.Now().UTC(),
-		Email:     params.Email,
+		ID:             uuid.New(),
+		CreatedAt:      time.Now().UTC(),
+		UpdatedAt:      time.Now().UTC(),
+		Email:          params.Email,
+		HashedPassword: hashedPass,
 	}
 
 	dbUser, err := c.db.CreateUser(r.Context(), newUserParams)
@@ -46,6 +82,7 @@ func (c *apiConfig) createUserHandler(w http.ResponseWriter, r *http.Request) {
 	sendRespondJSON(w, 201, mapDbUserToResponseUser(dbUser))
 }
 
+// This helper doesn't return the hashed password as a response!
 func mapDbUserToResponseUser(dbUser database.User) User {
 	return User{
 		ID:        dbUser.ID,
