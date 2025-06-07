@@ -1,15 +1,29 @@
 package main
 
 import (
+	"chirpy/internal/database"
+	"database/sql"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"sync/atomic"
+
+	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
 )
 
 func main() {
 
 	const port = "8080"
+
+	godotenv.Load()
+	dbURL := os.Getenv("DB_URL")
+	db, err := sql.Open("postgres", dbURL)
+	if err != nil {
+		log.Printf("couldn't open connection to database %s", err)
+	}
+	_ = database.New(db)
 
 	mux := http.NewServeMux()
 	apiCfg := apiConfig{}
@@ -27,7 +41,7 @@ func main() {
 		Handler: mux,
 	}
 
-	err := srv.ListenAndServe()
+	err = srv.ListenAndServe()
 	if err != nil {
 		log.Fatal("ListenAndServe :", err)
 	}
@@ -60,6 +74,7 @@ func (c *apiConfig) resetServerHits(w http.ResponseWriter, r *http.Request) {
 
 type apiConfig struct {
 	fileserverHits atomic.Int32
+	db             *database.Queries
 }
 
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
