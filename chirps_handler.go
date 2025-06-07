@@ -18,6 +18,7 @@ type Chirp struct {
 	UserID    uuid.UUID `json:"user_id"`
 }
 
+// Create NewChirp in Db and send JSON response
 func (c *apiConfig) newChirpHandler(w http.ResponseWriter, r *http.Request) {
 
 	type reqVals struct {
@@ -53,6 +54,7 @@ func (c *apiConfig) newChirpHandler(w http.ResponseWriter, r *http.Request) {
 
 	cleanBody := strings.Join(uncleanBody, " ")
 
+	// Set new chirp parameters
 	newChirp := Chirp{
 		ID:        uuid.New(),
 		CreatedAt: time.Now().UTC(),
@@ -61,11 +63,42 @@ func (c *apiConfig) newChirpHandler(w http.ResponseWriter, r *http.Request) {
 		UserID:    reqParams.UserId,
 	}
 
+	// Query new chirp creation in db
 	_, err = c.db.CreateChirp(r.Context(), database.CreateChirpParams(newChirp))
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Couldn't create chirp", err)
 		return
 	}
-
+	// If creation is succesful, send JSON response
 	sendRespondJSON(w, 201, newChirp)
+}
+
+// Lists all chirps in table
+func (c *apiConfig) getAllChirpsHandler(w http.ResponseWriter, r *http.Request) {
+
+	allChirps, err := c.db.GetChirps(r.Context())
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't get chirps", err)
+		return
+	}
+
+	respChirps := mapDbChirpsToJSON(allChirps)
+
+	sendRespondJSON(w, 200, respChirps)
+
+}
+
+// Maps database.Chirp struct to a JSON ready Chirp struct
+func mapDbChirpsToJSON(dbChirps []database.Chirp) []Chirp {
+	jsonChirps := make([]Chirp, len(dbChirps))
+	for i, dbChirp := range dbChirps {
+		jsonChirps[i] = Chirp{
+			ID:        dbChirp.ID,
+			CreatedAt: dbChirp.CreatedAt,
+			UpdatedAt: dbChirp.UpdatedAt,
+			Body:      dbChirp.Body,
+			UserID:    dbChirp.UserID,
+		}
+	}
+	return jsonChirps
 }
