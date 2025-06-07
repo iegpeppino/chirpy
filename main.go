@@ -13,28 +13,41 @@ import (
 	_ "github.com/lib/pq"
 )
 
+type apiConfig struct {
+	fileserverHits atomic.Int32
+	db             *database.Queries
+	platform       string
+}
+
 func main() {
 
-	const port = "8080"
-
+	// Load .env and get env variables to set db connection
 	godotenv.Load()
 	dbURL := os.Getenv("DB_URL")
+	env_platform := os.Getenv("PLATFORM")
+
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		log.Printf("couldn't open connection to database %s", err)
 	}
-	_ = database.New(db)
 
+	dbQueries := database.New(db)
+
+	apiCfg := apiConfig{
+		db:       dbQueries,
+		platform: env_platform,
+	}
+
+	const port = "8080"
 	mux := http.NewServeMux()
-	apiCfg := apiConfig{}
 
 	fs := http.FileServer(http.Dir("./app/"))
-
 	mux.Handle("/app/", apiCfg.middlewareMetricsInc(http.StripPrefix("/app", fs)))
 	mux.HandleFunc("GET /api/healthz", readinessHandler)
 	mux.HandleFunc("GET /admin/metrics", apiCfg.getServerRequestsHandler)
-	mux.HandleFunc("POST /admin/reset", apiCfg.resetServerHits)
+	mux.HandleFunc("POST /admin/reset", apiCfg.resetServerUsers)
 	mux.HandleFunc("POST /api/validate_chirp", validateChirpHandler)
+	mux.HandleFunc("POST /api/users", apiCfg.createUserHandler)
 
 	srv := &http.Server{
 		Addr:    ":" + port,
@@ -67,14 +80,19 @@ func (c *apiConfig) getServerRequestsHandler(w http.ResponseWriter, r *http.Requ
 	`, hits)
 }
 
-func (c *apiConfig) resetServerHits(w http.ResponseWriter, r *http.Request) {
+func (c *apiConfig) resetServerUsers(w http.ResponseWriter, r *http.Request) {
+	if c.platform != "dev" {
+		w.WriteHeader(403)
+		w.Write([]byte("403 Forbidden\n"))
+		return
+	}
 	w.WriteHeader(200)
 	c.fileserverHits.Store(int32(0))
-}
-
-type apiConfig struct {
-	fileserverHits atomic.Int32
-	db             *database.Queries
+	err := c.db.ResetUsers(r.Context())
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Couldn't delete users from table", err)
+		return
+	}
 }
 
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
