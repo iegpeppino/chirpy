@@ -34,8 +34,9 @@ func main() {
 	dbQueries := database.New(db)
 
 	apiCfg := apiConfig{
-		db:       dbQueries,
-		platform: env_platform,
+		fileserverHits: atomic.Int32{},
+		db:             dbQueries,
+		platform:       env_platform,
 	}
 
 	const port = "8080"
