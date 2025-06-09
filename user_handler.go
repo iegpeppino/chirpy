@@ -17,8 +17,10 @@ type User struct {
 	Email     string    `json:"email"`
 }
 
+// Handles User login endpoint
 func (c *apiConfig) loginUserHandler(w http.ResponseWriter, r *http.Request) {
 
+	// Setting JSON response structure
 	type response struct {
 		User         User
 		Token        string `json:"token"`
@@ -26,11 +28,13 @@ func (c *apiConfig) loginUserHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	decoder := json.NewDecoder(r.Body)
 
+	// Creating frame for request Parameters
 	type reqParams struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
 	}
 
+	// Decoding parameters into frame struct
 	params := reqParams{}
 	err := decoder.Decode(&params)
 	if err != nil {
@@ -38,12 +42,14 @@ func (c *apiConfig) loginUserHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Query user with email sent in request
 	user, err := c.db.GetUserByEmail(r.Context(), params.Email)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Couldn't get user data", err)
 		return
 	}
 
+	// Validate user password
 	err = auth.CheckPasswordHash(user.HashedPassword, params.Password)
 	if err != nil {
 		respondWithError(w, http.StatusUnauthorized, "Incorrect email or password", err)
@@ -91,14 +97,17 @@ func (c *apiConfig) loginUserHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// Handles POST user endpoint to create new user in table
 func (c *apiConfig) createUserHandler(w http.ResponseWriter, r *http.Request) {
+
 	decoder := json.NewDecoder(r.Body)
 
+	// Set frame to map request parameters
 	type reqParams struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
 	}
-
+	// Decode parameters into frame struct
 	params := reqParams{}
 	err := decoder.Decode(&params)
 	if err != nil {
@@ -111,7 +120,7 @@ func (c *apiConfig) createUserHandler(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusBadRequest, "Couldn't hash password", err)
 		return
 	}
-
+	// Set newUserParameters for the query
 	newUserParams := database.CreateUserParams{
 		ID:             uuid.New(),
 		CreatedAt:      time.Now().UTC(),
@@ -119,13 +128,13 @@ func (c *apiConfig) createUserHandler(w http.ResponseWriter, r *http.Request) {
 		Email:          params.Email,
 		HashedPassword: hashedPass,
 	}
-
+	// Query new user creation
 	dbUser, err := c.db.CreateUser(r.Context(), newUserParams)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Couldn't create new user", err)
 		return
 	}
-
+	// Send response if query was succesful
 	sendRespondJSON(w, 201,
 		User{
 			ID:        dbUser.ID,
