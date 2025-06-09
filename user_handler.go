@@ -18,6 +18,12 @@ type User struct {
 }
 
 func (c *apiConfig) loginUserHandler(w http.ResponseWriter, r *http.Request) {
+
+	type response struct {
+		User         User
+		Token        string `json:"token"`
+		RefreshToken string `json:"refresh_token"`
+	}
 	decoder := json.NewDecoder(r.Body)
 
 	type reqParams struct {
@@ -35,14 +41,54 @@ func (c *apiConfig) loginUserHandler(w http.ResponseWriter, r *http.Request) {
 	user, err := c.db.GetUserByEmail(r.Context(), params.Email)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Couldn't get user data", err)
+		return
 	}
 
 	err = auth.CheckPasswordHash(user.HashedPassword, params.Password)
 	if err != nil {
 		respondWithError(w, http.StatusUnauthorized, "Incorrect email or password", err)
+		return
 	}
 
-	sendRespondJSON(w, 200, mapDbUserToResponseUser(user))
+	// Generate JWT for user
+	tokenStr, err := auth.MakeJWT(user.ID, c.secret, time.Hour*1)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't generate access JWT", err)
+		return
+	}
+
+	// Generate refresh token
+	refreshTokenStr, err := auth.MakeRefreshToken()
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't generate refresh token", err)
+		return
+	}
+
+	_, err = c.db.GenerateRefreshToken(
+		r.Context(),
+		database.GenerateRefreshTokenParams{
+			Token:     refreshTokenStr,
+			CreatedAt: time.Now().UTC(), // These attributes could be set in the
+			UpdatedAt: time.Now().UTC(), // createTokenQuery itself and not passed down the first time
+			UserID:    user.ID,
+			ExpiresAt: time.Now().UTC().Add(time.Hour * 24 * 60),
+		},
+	)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't generate refresh token", err)
+		return
+	}
+
+	sendRespondJSON(w, 200, response{
+		User: User{
+			ID:        user.ID,
+			CreatedAt: user.CreatedAt,
+			UpdatedAt: user.UpdatedAt,
+			Email:     user.Email,
+		},
+		Token:        tokenStr,
+		RefreshToken: refreshTokenStr,
+	})
 }
 
 func (c *apiConfig) createUserHandler(w http.ResponseWriter, r *http.Request) {
@@ -63,6 +109,7 @@ func (c *apiConfig) createUserHandler(w http.ResponseWriter, r *http.Request) {
 	hashedPass, err := auth.HashPassword(params.Password)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Couldn't hash password", err)
+		return
 	}
 
 	newUserParams := database.CreateUserParams{
@@ -79,15 +126,12 @@ func (c *apiConfig) createUserHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sendRespondJSON(w, 201, mapDbUserToResponseUser(dbUser))
-}
-
-// This helper doesn't return the hashed password as a response!
-func mapDbUserToResponseUser(dbUser database.User) User {
-	return User{
-		ID:        dbUser.ID,
-		CreatedAt: dbUser.CreatedAt,
-		UpdatedAt: dbUser.UpdatedAt,
-		Email:     dbUser.Email,
-	}
+	sendRespondJSON(w, 201,
+		User{
+			ID:        dbUser.ID,
+			CreatedAt: dbUser.CreatedAt,
+			UpdatedAt: dbUser.UpdatedAt,
+			Email:     dbUser.Email,
+		},
+	)
 }

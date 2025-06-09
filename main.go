@@ -17,6 +17,7 @@ type apiConfig struct {
 	fileserverHits atomic.Int32
 	db             *database.Queries
 	platform       string
+	secret         string
 }
 
 func main() {
@@ -24,6 +25,7 @@ func main() {
 	// Load .env and get env variables to set db connection
 	godotenv.Load()
 	dbURL := os.Getenv("DB_URL")
+	secretStr := os.Getenv("SECRET")
 	env_platform := os.Getenv("PLATFORM")
 
 	db, err := sql.Open("postgres", dbURL)
@@ -37,6 +39,7 @@ func main() {
 		fileserverHits: atomic.Int32{},
 		db:             dbQueries,
 		platform:       env_platform,
+		secret:         secretStr,
 	}
 
 	const port = "8080"
@@ -52,6 +55,8 @@ func main() {
 	mux.HandleFunc("GET /api/chirps", apiCfg.getAllChirpsHandler)
 	mux.HandleFunc("GET /api/chirps/{chirpID}", apiCfg.getChirpByIDHandler)
 	mux.HandleFunc("POST /api/login", apiCfg.loginUserHandler)
+	mux.HandleFunc("POST /api/refresh", apiCfg.refreshTokenHandler)
+	mux.HandleFunc("POST /api/revoke", apiCfg.revokeTokenHandler)
 
 	srv := &http.Server{
 		Addr:    ":" + port,

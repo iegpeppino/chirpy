@@ -1,6 +1,7 @@
 package main
 
 import (
+	"chirpy/internal/auth"
 	"chirpy/internal/database"
 	"encoding/json"
 	"net/http"
@@ -22,15 +23,26 @@ type Chirp struct {
 func (c *apiConfig) newChirpHandler(w http.ResponseWriter, r *http.Request) {
 
 	type reqVals struct {
-		Body   string    `json:"body"`
-		UserId uuid.UUID `json:"user_id"`
+		Body string `json:"body"`
 	}
 
 	// Decode request JSON and map to struct
 	decoder := json.NewDecoder(r.Body)
 	reqParams := reqVals{}
 
-	err := decoder.Decode(&reqParams)
+	tokenStr, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, 401, "User has no token", err)
+		return
+	}
+
+	userID, err := auth.ValidateJWT(tokenStr, c.secret)
+	if err != nil {
+		respondWithError(w, 401, "Unauthorized user", err)
+		return
+	}
+
+	err = decoder.Decode(&reqParams)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't decode parameters", err)
 		return
@@ -60,7 +72,7 @@ func (c *apiConfig) newChirpHandler(w http.ResponseWriter, r *http.Request) {
 		CreatedAt: time.Now().UTC(),
 		UpdatedAt: time.Now().UTC(),
 		Body:      cleanBody,
-		UserID:    reqParams.UserId,
+		UserID:    userID,
 	}
 
 	// Query new chirp creation in db

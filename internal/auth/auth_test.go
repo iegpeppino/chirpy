@@ -62,7 +62,7 @@ import (
 
 func TestValidateJWT(t *testing.T) {
 	userID := uuid.New()
-	validToken, _ := MakeJWT(userID, "secret", time.Hour)
+	validToken, _ := MakeJWT(userID, "secret", time.Hour*1)
 
 	tests := []struct {
 		name        string
