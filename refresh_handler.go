@@ -16,13 +16,13 @@ func (c *apiConfig) refreshTokenHandler(w http.ResponseWriter, r *http.Request) 
 	// Get user's refresh token
 	refreshToken, err := auth.GetBearerToken(r.Header)
 	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Couldn't get token", err)
+		respondWithError(w, 401, "Couldn't get token", err)
 		return
 	}
 	// Query user data using the refresh token
 	user, err := c.db.GetUserFromRefreshToken(r.Context(), refreshToken)
 	if err != nil {
-		respondWithError(w, http.StatusUnauthorized, "Couldn't get user for refresh token", err)
+		respondWithError(w, 401, "Couldn't get user for refresh token", err)
 		return
 	}
 
