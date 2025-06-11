@@ -11,10 +11,11 @@ import (
 )
 
 type User struct {
-	ID        uuid.UUID `json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Email     string    `json:"email"`
+	ID          uuid.UUID `json:"id"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	Email       string    `json:"email"`
+	IsChirpyRed bool      `json:"is_chirpy_red"`
 }
 
 // Handles User login endpoint
@@ -22,9 +23,11 @@ func (c *apiConfig) loginUserHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Setting JSON response structure
 	type response struct {
-		User         User
+		Email        string `json:"email"`
+		Password     string `json:"password"`
 		Token        string `json:"token"`
 		RefreshToken string `json:"refresh_token"`
+		IsChirpyRed  bool   `json:"is_chirpy_red"`
 	}
 	decoder := json.NewDecoder(r.Body)
 
@@ -86,14 +89,17 @@ func (c *apiConfig) loginUserHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sendRespondJSON(w, 200, response{
-		User: User{
-			ID:        user.ID,
-			CreatedAt: user.CreatedAt,
-			UpdatedAt: user.UpdatedAt,
-			Email:     user.Email,
-		},
+		// User: User{
+		// 	ID:        user.ID,
+		// 	CreatedAt: user.CreatedAt,
+		// 	UpdatedAt: user.UpdatedAt,
+		// 	Email:     user.Email,
+		// },
+		Email:        user.Email,
+		Password:     user.HashedPassword,
 		Token:        tokenStr,
 		RefreshToken: refreshTokenStr,
+		IsChirpyRed:  user.IsChirpyRed,
 	})
 }
 
@@ -137,10 +143,11 @@ func (c *apiConfig) createUserHandler(w http.ResponseWriter, r *http.Request) {
 	// Send response if query was succesful
 	sendRespondJSON(w, 201,
 		User{
-			ID:        dbUser.ID,
-			CreatedAt: dbUser.CreatedAt,
-			UpdatedAt: dbUser.UpdatedAt,
-			Email:     dbUser.Email,
+			ID:          dbUser.ID,
+			CreatedAt:   dbUser.CreatedAt,
+			UpdatedAt:   dbUser.UpdatedAt,
+			Email:       dbUser.Email,
+			IsChirpyRed: dbUser.IsChirpyRed,
 		},
 	)
 }
