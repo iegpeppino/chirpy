@@ -30,6 +30,7 @@ func (c *apiConfig) newChirpHandler(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	reqParams := reqVals{}
 
+	// Get user token and validate Token
 	tokenStr, err := auth.GetBearerToken(r.Header)
 	if err != nil {
 		respondWithError(w, 401, "User has no token", err)
@@ -54,6 +55,7 @@ func (c *apiConfig) newChirpHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Censor 'insults' from chirp
 	badWords := []string{"kerfuffle", "sharbert", "fornax"}
 	uncleanBody := strings.Split(reqParams.Body, " ")
 	for i, word := range uncleanBody {
@@ -83,50 +85,6 @@ func (c *apiConfig) newChirpHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	// If creation is succesful, send JSON response
 	sendRespondJSON(w, 201, newChirp)
-}
-
-// Lists all chirps in table
-func (c *apiConfig) getAllChirpsHandler(w http.ResponseWriter, r *http.Request) {
-
-	allChirps, err := c.db.GetChirps(r.Context())
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Couldn't get chirps", err)
-		return
-	}
-
-	respChirps := mapDbChirpsToJSON(allChirps)
-
-	sendRespondJSON(w, 200, respChirps)
-
-}
-
-// Gets single chirp by ID
-func (c *apiConfig) getChirpByIDHandler(w http.ResponseWriter, r *http.Request) {
-
-	// Parse id from path to UUID element
-	chirpID, err := uuid.Parse(r.PathValue("chirpID"))
-	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Invalid UUID format", err)
-		return
-	}
-
-	// Get chirp from db
-	chirp, err := c.db.GetChirpByID(r.Context(), chirpID)
-	if err != nil {
-		respondWithError(w, 404, "Couldn't get chirp", err)
-		return
-	}
-
-	// Map chirp to response adequate struct
-	respChirp := Chirp{
-		ID:        chirpID,
-		CreatedAt: chirp.CreatedAt,
-		UpdatedAt: chirp.UpdatedAt,
-		Body:      chirp.Body,
-		UserID:    chirp.UserID,
-	}
-
-	sendRespondJSON(w, 200, respChirp)
 }
 
 // Maps database.Chirp struct to a JSON ready Chirp struct

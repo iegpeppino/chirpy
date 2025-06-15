@@ -6,6 +6,9 @@ import (
 	"net/http"
 )
 
+// Helper funcs to send http responses
+
+// Send error response
 func respondWithError(w http.ResponseWriter, code int, msg string, err error) {
 	if err != nil {
 		log.Println(err)
@@ -22,6 +25,7 @@ func respondWithError(w http.ResponseWriter, code int, msg string, err error) {
 	sendRespondJSON(w, code, errorResponse{Error: msg})
 }
 
+// Send JSON response (mostly used for successful request)
 func sendRespondJSON(w http.ResponseWriter, code int, payload interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	data, err := json.Marshal(payload)

@@ -33,6 +33,7 @@ func main() {
 		log.Fatal("POLKA_KEY env variable is not set")
 	}
 
+	// Connect to database
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		log.Printf("couldn't open connection to database %s", err)
@@ -40,6 +41,7 @@ func main() {
 
 	dbQueries := database.New(db)
 
+	// Set http client Configuration
 	apiCfg := apiConfig{
 		fileserverHits: atomic.Int32{},
 		db:             dbQueries,
@@ -51,30 +53,39 @@ func main() {
 	const port = "8080"
 	mux := http.NewServeMux()
 
+	// Set url to serve static files
 	fs := http.FileServer(http.Dir("./app/"))
 	mux.Handle("/app/", apiCfg.middlewareMetricsInc(http.StripPrefix("/app", fs)))
-	mux.HandleFunc("GET /api/healthz", readinessHandler)
-	mux.HandleFunc("GET /admin/metrics", apiCfg.getServerRequestsHandler)
-	mux.HandleFunc("POST /admin/reset", apiCfg.resetServerUsers)
-	mux.HandleFunc("POST /api/users", apiCfg.createUserHandler)
-	mux.HandleFunc("POST /api/chirps", apiCfg.newChirpHandler)
-	mux.HandleFunc("GET /api/chirps", apiCfg.getAllChirpsHandler)
-	mux.HandleFunc("GET /api/chirps/{chirpID}", apiCfg.getChirpByIDHandler)
-	mux.HandleFunc("POST /api/login", apiCfg.loginUserHandler)
-	mux.HandleFunc("POST /api/refresh", apiCfg.refreshTokenHandler)
-	mux.HandleFunc("POST /api/revoke", apiCfg.revokeTokenHandler)
-	mux.HandleFunc("PUT /api/users", apiCfg.updateUserHandler)
-	mux.HandleFunc("DELETE /api/chirps/{chirpID}", apiCfg.deleteChirpHandler)
-	mux.HandleFunc("POST /api/polka/webhooks", apiCfg.upgradeUserHandler)
 
+	mux.HandleFunc("GET /api/healthz", readinessHandler)                  // Returns 200 code
+	mux.HandleFunc("GET /admin/metrics", apiCfg.getServerRequestsHandler) // Counts server hits
+
+	mux.HandleFunc("POST /admin/reset", apiCfg.resetServerUsers) // Deletes all users from table
+
+	mux.HandleFunc("POST /api/users", apiCfg.createUserHandler) // Create user
+	mux.HandleFunc("POST /api/login", apiCfg.loginUserHandler)  // Login user
+	mux.HandleFunc("PUT /api/users", apiCfg.updateUserHandler)  // Update email and password
+
+	mux.HandleFunc("POST /api/refresh", apiCfg.refreshTokenHandler) // Refresh access token
+	mux.HandleFunc("POST /api/revoke", apiCfg.revokeTokenHandler)   // Revoke refresh token
+
+	mux.HandleFunc("POST /api/chirps", apiCfg.newChirpHandler)                // Create chirp
+	mux.HandleFunc("GET /api/chirps", apiCfg.getAllChirpsHandler)             // List all chirps
+	mux.HandleFunc("GET /api/chirps/{chirpID}", apiCfg.getChirpByIDHandler)   // Get specific chirp
+	mux.HandleFunc("DELETE /api/chirps/{chirpID}", apiCfg.deleteChirpHandler) // Delete chirp
+
+	mux.HandleFunc("POST /api/polka/webhooks", apiCfg.upgradeUserHandler) // Update user subscription field
+
+	// Set http server
 	srv := &http.Server{
 		Addr:    ":" + port,
 		Handler: mux,
 	}
 
+	// Listen for requests
 	err = srv.ListenAndServe()
 	if err != nil {
-		log.Fatal("ListenAndServe :", err)
+		log.Fatal("ListenAndServe :", err) // Locks the server until interruption
 	}
 
 }
@@ -96,21 +107,6 @@ func (c *apiConfig) getServerRequestsHandler(w http.ResponseWriter, r *http.Requ
 			</body>
 		</html>
 	`, hits)
-}
-
-func (c *apiConfig) resetServerUsers(w http.ResponseWriter, r *http.Request) {
-	if c.platform != "dev" {
-		w.WriteHeader(403)
-		w.Write([]byte("403 Forbidden\n"))
-		return
-	}
-	w.WriteHeader(200)
-	c.fileserverHits.Store(int32(0))
-	err := c.db.ResetUsers(r.Context())
-	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Couldn't delete users from table", err)
-		return
-	}
 }
 
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {

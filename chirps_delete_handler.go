@@ -28,23 +28,27 @@ func (c *apiConfig) deleteChirpHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Parse chirp id from URL
 	chirpID, err := uuid.Parse(r.PathValue("chirpID"))
 	if err != nil {
 		respondWithError(w, 403, "Couldn't parse Id field", err)
 		return
 	}
 
+	// Query get chirp by ID
 	chirp, err := c.db.GetChirpByID(r.Context(), chirpID)
 	if err != nil {
 		respondWithError(w, 404, "Couldn't find chirp", err)
 		return
 	}
 
+	// Check if user is creator of chirp
 	if chirp.UserID != userID {
 		respondWithError(w, 403, "Unauthorized user", err)
 		return
 	}
 
+	// Query delete chirp from table
 	err = c.db.DeleteChirpById(r.Context(),
 		database.DeleteChirpByIdParams{
 			ID:     chirpID,
@@ -55,6 +59,7 @@ func (c *apiConfig) deleteChirpHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Success response
 	sendRespondJSON(w, 204,
 		response{
 			Text: "Chirp deleted succesfully",
